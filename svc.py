@@ -57,7 +57,7 @@ options:
         required: false
         choices: [ "yes", "no" ]
         description:
-            - Wheater the service is enabled or not, if disabled it also implies stopped.
+            - Whether the service is enabled or not, if disabled it also implies stopped.
               Make note that a service can be enabled and downed (no auto restart).
     service_dir:
         required: false
@@ -66,8 +66,15 @@ options:
             - directory svscan watches for services
     service_src:
         required: false
+        default: /etc/service
         description:
             - directory where services are defined, the source of symlinks to service_dir.
+    distro:
+        required: false
+        default: daemontools
+        choices: ["daemontools", "nosh"]
+        description:
+            - Which daemontools-family toolset to use
 '''
 
 EXAMPLES = '''
@@ -114,7 +121,7 @@ def _load_dist_subclass(cls, *args, **kwargs):
     '''
     subclass = None
 
-    distro = kwargs['module'].params['distro']
+    distro = args[0][0].params['distro']
 
     # get the most specific superclass for this platform
     if distro is not None:
@@ -129,12 +136,12 @@ def _load_dist_subclass(cls, *args, **kwargs):
 class Svc(object):
     """
     Main class that handles daemontools, can be subclassed and overridden in case
-    we want to use a 'derivative' like encore, s6, etc
+    we want to use a 'derivative' like encore, s6, etc.
     """
 
 
-    #def __new__(cls, *args, **kwargs):
-    #    return _load_dist_subclass(cls, args, kwargs)
+    def __new__(cls, *args, **kwargs):
+        return _load_dist_subclass(cls, args, kwargs)
 
 
 
@@ -255,6 +262,76 @@ class Svc(object):
             states[k] = self.__dict__[k]
         return states
 
+class Nosh(Svc):
+    """Class used for the nosh service manager"""
+
+    distro = 'nosh'
+
+    def __init__(self, module):
+        Svc.__init__(self,module)
+
+        self.sys_cmd = module.get_bin_path('system-control', opt_dirs=self.extra_paths)
+        self.svc_cmd = module.get_bin_path('service-control', opt_dirs=self.extra_paths)
+        self.svstat_cmd = module.get_bin_path('service-show', opt_dirs=self.extra_paths)
+
+    def enable(self):
+        return self.execute_command([self.sys_cmd, 'enable', self.svc_full])
+
+    def disable(self):
+        return self.execute_command([self.sys_cmd, 'disable', self.svc_full])
+
+    def get_status(self):
+        (rc, out, err) = self.execute_command([self.svstat_cmd, '--json', self.svc_full])
+
+        if err is not None and err:
+            self.full_state = self.state = err
+        else:
+            self.full_state = out
+            json_out = json.loads(out)
+
+            self.pid = json_out[self.svc_full]['MainPID']
+
+            self.duration = (int(time.time()) - int(json_out[self.svc_full]['RunUTCTimestamp']))
+
+            # Daemontools-encore has the "starting/started/running" states (and others) which don't
+            # match completely here
+            if json_out[self.svc_full]['DaemontoolsEncoreState'] == 'running':
+                self.state = 'started'
+            elif json_out[self.svc_full]['DaemontoolsEncoreState'] == 'starting':
+                self.state = 'starting'
+            elif json_out[self.svc_full]['DaemontoolsEncoreState'] == 'stopped':
+                self.state = 'stopped'
+            elif json_out[self.svc_full]['DaemontoolsEncoreState'] == 'stopping':
+                self.state = 'stopping'
+            else:
+                self.state = 'unknown'
+                return
+
+    def start(self):
+        return self.execute_command([self.sys_cmd, 'start', self.svc_full])
+
+    def stop(self):
+        return self.execute_command([self.sys_cmd, 'stop', self.svc_full])
+
+    def once(self):
+        return self.execute_command([self.svc_cmd, '--once', self.svc_full])
+
+    def reload(self):
+        return self.execute_command([self.svc_cmd, '--usr1', self.svc_full])
+
+    def restart(self):
+        return self.execute_command([self.sys_cmd, 'condrestart', self.svc_full])
+
+    def kill(self):
+        return self.execute_command([self.svc_cmd, '--kill', self.svc_full])
+
+    def report(self):
+        self.get_status()
+        states = {}
+        for k in self.report_vars:
+            states[k] = self.__dict__[k]
+        return states
+
 # ===========================================
 # Main control flow
 
@@ -265,7 +342,7 @@ def main():
             state = dict(choices=['started', 'stopped', 'restarted', 'killed', 'reloaded', 'once']),
             enabled = dict(required=False, type='bool'),
             downed = dict(required=False, type='bool'),
-            dist = dict(required=False, default='daemontools'),
+            distro = dict(required=False, default='daemontools', choices=['daemontools', 'nosh']),
             service_dir = dict(required=False, default='/service'),
             service_src = dict(required=False, default='/etc/service'),
         ),
