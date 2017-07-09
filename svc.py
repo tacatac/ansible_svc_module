@@ -108,6 +108,13 @@ EXAMPLES = '''
     name: dnscache
     state: reloaded
     service_dir: /var/service
+
+# Example using alt distro
+ - svc:
+    name: sshd
+    state: started
+    service_dir: /var/sv
+    distro: nosh
 '''
 
 import platform
@@ -115,13 +122,13 @@ import shlex
 from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.basic import *
 
-def _load_dist_subclass(cls, *args, **kwargs):
+def _load_dist_subclass(cls, module):
     '''
     Used for derivative implementations
     '''
     subclass = None
 
-    distro = args[0][0].params['distro']
+    distro = module.params['distro']
 
     # get the most specific superclass for this platform
     if distro is not None:
@@ -140,8 +147,8 @@ class Svc(object):
     """
 
 
-    def __new__(cls, *args, **kwargs):
-        return _load_dist_subclass(cls, args, kwargs)
+    def __new__(cls, module):
+        return _load_dist_subclass(cls, module)
 
 
 
