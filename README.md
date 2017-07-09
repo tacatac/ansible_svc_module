@@ -28,6 +28,12 @@ The following assignment works but is rather cryptic and there is presumably a m
 
     distro = args[0][0].params['distro]
 
+The function signature has now been simplified, making it more readable, since only one argument is given to the Svc instance (`svc = Svc(module)`):
+
+    def _load_dist_subclass(cls, module):
+        ...
+        distro = module.params['distro']
+
 Subclasses can then define a `distro` attribute and the mechanism works.
 
 ## minor corrections
