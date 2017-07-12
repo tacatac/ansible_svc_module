@@ -28,7 +28,7 @@ The following assignment works but is rather cryptic and there is presumably a m
 
     distro = args[0][0].params['distro]
 
-The function signature has now been simplified, making it more readable, since only one argument is given to the Svc instance (`svc = Svc(module)`):
+The solution adopted here is to simplify the function signature, making it more readable, since only one argument is given to the Svc instance (`svc = Svc(module)`):
 
     def _load_dist_subclass(cls, module):
         ...
@@ -41,6 +41,10 @@ Subclasses can then define a `distro` attribute and the mechanism works.
 The `distro` parameter referred to in `_load_dist_subclass` is actually called `dist` in the AnsibleModule `argument_spec`
 
 The `distro` parameter is not mentionned in the documentation.
+
+The `killed` state mentionned in the documentation but not listed as possible state.
+
+The state -> method correspondence has needless indirection.
 
 ## usage
 
