@@ -38,7 +38,7 @@ options:
             - Name of the service to manage.
     state:
         required: false
-        choices: [ started, stopped, restarted, reloaded, once ]
+        choices: [ started, stopped, restarted, killed, reloaded, once ]
         description:
             - C(Started)/C(stopped) are idempotent actions that will not run
               commands unless necessary.  C(restarted) will always bounce the
@@ -233,25 +233,22 @@ class Svc(object):
             else:
                 self.state += 'ed'
 
-    def start(self):
+    def started(self):
         return self.execute_command([self.svc_cmd, '-u', self.svc_full])
 
-    def stopp(self):
-        return self.stop()
-
-    def stop(self):
+    def stopped(self):
         return self.execute_command([self.svc_cmd, '-d', self.svc_full])
 
     def once(self):
         return self.execute_command([self.svc_cmd, '-o', self.svc_full])
 
-    def reload(self):
+    def reloaded(self):
         return self.execute_command([self.svc_cmd, '-1', self.svc_full])
 
-    def restart(self):
+    def restarted(self):
         return self.execute_command([self.svc_cmd, '-t', self.svc_full])
 
-    def kill(self):
+    def killed(self):
         return self.execute_command([self.svc_cmd, '-k', self.svc_full])
 
     def execute_command(self, cmd):
@@ -314,30 +311,95 @@ class Nosh(Svc):
                 self.state = 'unknown'
                 return
 
-    def start(self):
+    def started(self):
         return self.execute_command([self.sys_cmd, 'start', self.svc_full])
 
-    def stop(self):
+    def stopped(self):
         return self.execute_command([self.sys_cmd, 'stop', self.svc_full])
 
     def once(self):
         return self.execute_command([self.svc_cmd, '--once', self.svc_full])
 
-    def reload(self):
+    def reloaded(self):
         return self.execute_command([self.svc_cmd, '--usr1', self.svc_full])
 
-    def restart(self):
+    def restarted(self):
         return self.execute_command([self.sys_cmd, 'condrestart', self.svc_full])
 
-    def kill(self):
+    def killed(self):
         return self.execute_command([self.svc_cmd, '--kill', self.svc_full])
 
-    def report(self):
-        self.get_status()
-        states = {}
-        for k in self.report_vars:
-            states[k] = self.__dict__[k]
-        return states
+
+class Runit(Svc):
+    """
+    Class that handles runit
+    """
+
+    distro = 'runit'
+
+    def __init__(self, module):
+        Svc.__init__(self, module)
+
+        self.svc_cmd        = module.get_bin_path('sv', opt_dirs=self.extra_paths)
+        self.svstat_cmd     = module.get_bin_path('sv', opt_dirs=self.extra_paths)
+
+        self.enabled = os.path.lexists(self.svc_full)
+        if self.enabled:
+            self.get_status()
+        else:
+            self.state = 'stopped'
+
+
+    def disable(self):
+        self.execute_command([self.svc_cmd,'force-stop',self.src_full])
+        try:
+            os.unlink(self.svc_full)
+        except OSError:
+            e = get_exception()
+            self.module.fail_json(path=self.svc_full, msg='Error while unlinking: %s' % str(e))
+
+    def get_status(self):
+        (rc, out, err) = self.execute_command([self.svstat_cmd, 'status', self.svc_full])
+
+        if err is not None and err:
+            self.full_state = self.state = err
+        else:
+            self.full_state = out
+
+            m = re.search('\(pid (\d+)\)', out)
+            if m:
+                self.pid = m.group(1)
+
+            m = re.search(' (\d+)s', out)
+            if m:
+                self.duration = m.group(1)
+
+            if re.search('run:', out):
+                self.state = 'started'
+            elif re.search('down:', out):
+                self.state = 'stopped'
+            else:
+                self.state = 'unknown'
+                return
+
+    def started(self):
+        return self.execute_command([self.svc_cmd, 'start', self.svc_full])
+
+    def stopped(self):
+        return self.execute_command([self.svc_cmd, 'stop', self.svc_full])
+
+    def once(self):
+        return self.execute_command([self.svc_cmd, 'once', self.svc_full])
+
+    def reloaded(self):
+        return self.execute_command([self.svc_cmd, 'reload', self.svc_full])
+
+    def restarted(self):
+        return self.execute_command([self.svc_cmd, 'restart', self.svc_full])
+
+    def killed(self):
+        return self.execute_command([self.svc_cmd, 'force-stop', self.svc_full])
+
 
 # ===========================================
 # Main control flow
@@ -381,7 +443,7 @@ def main():
     if state is not None and state != svc.state:
         changed = True
         if not module.check_mode:
-            getattr(svc,state[:-2])()
+            getattr(svc,state)()
 
     if downed is not None and downed != svc.downed:
         changed = True
