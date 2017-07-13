@@ -42,9 +42,11 @@ The `distro` parameter referred to in `_load_dist_subclass` is actually called `
 
 The `distro` parameter is not mentionned in the documentation.
 
-The `killed` state mentionned in the documentation but not listed as possible state.
+The `killed` state is mentionned in the documentation but not listed as possible state.
 
-The state -> method correspondence has needless indirection.
+The state -> method correspondence has needless indirection. Methods are now named after the expected state directly.
+
+Daemontools' `svc` doesn't have a `-1` option for the SIGUSR1 signal, it has been replaced by `-h` for SIGHUP, which is also the more usual reloading signal.
 
 ## usage
 

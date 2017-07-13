@@ -72,7 +72,7 @@ options:
     distro:
         required: false
         default: daemontools
-        choices: ["daemontools", "nosh"]
+        choices: ["daemontools", "nosh", "runit", "s6"]
         description:
             - Which daemontools-family toolset to use
 '''
@@ -243,7 +243,7 @@ class Svc(object):
         return self.execute_command([self.svc_cmd, '-o', self.svc_full])
 
     def reloaded(self):
-        return self.execute_command([self.svc_cmd, '-1', self.svc_full])
+        return self.execute_command([self.svc_cmd, '-h', self.svc_full])
 
     def restarted(self):
         return self.execute_command([self.svc_cmd, '-t', self.svc_full])
@@ -400,6 +400,96 @@ class Runit(Svc):
     def killed(self):
         return self.execute_command([self.svc_cmd, 'force-stop', self.svc_full])
 
+class S6(Svc):
+    """
+    Class that handles s6
+    """
+
+    distro = 's6'
+
+    def __init__(self, module):
+        Svc.__init__(self, module)
+
+        self.svc_cmd        = module.get_bin_path('s6-svc', opt_dirs=self.extra_paths)
+        self.svstat_cmd     = module.get_bin_path('s6-svstat', opt_dirs=self.extra_paths)
+
+        self.enabled = os.path.lexists(self.svc_full)
+        if self.enabled:
+            self.downed = os.path.lexists('%s/down' % self.svc_full)
+            self.get_status()
+        else:
+            self.downed = os.path.lexists('%s/down' % self.src_full)
+            self.state = 'stopped'
+
+
+    def enable(self):
+        if os.path.exists(self.src_full):
+            try:
+                os.symlink(self.src_full, self.svc_full)
+            except OSError:
+                e = get_exception()
+                self.module.fail_json(path=self.src_full, msg='Error while linking: %s' % str(e))
+        else:
+            self.module.fail_json(msg="Could not find source for service to enable (%s)." % self.src_full)
+
+    def disable(self):
+        try:
+            os.unlink(self.svc_full)
+        except OSError:
+            e = get_exception()
+            self.module.fail_json(path=self.svc_full, msg='Error while unlinking: %s' % str(e))
+        self.execute_command([self.svc_cmd,'-dx',self.src_full])
+
+        src_log = '%s/log' % self.src_full
+        if os.path.exists(src_log):
+            self.execute_command([self.svc_cmd,'-dx',src_log])
+
+    def get_status(self):
+        (rc, out, err) = self.execute_command([self.svstat_cmd, self.svc_full])
+
+        if err is not None and err:
+            self.full_state = self.state = err
+        else:
+            self.full_state = out
+
+            m = re.search('\(pid (\d+)\)', out)
+            if m:
+                self.pid = m.group(1)
+
+            m = re.search('(\d+) seconds', out)
+            if m:
+                self.duration = m.group(1)
+
+            if re.search(' up ', out):
+                self.state = 'start'
+            elif re.search(' down ', out):
+                self.state = 'stopp'
+            else:
+                self.state = 'unknown'
+                return
+
+            if re.search(' want ', out):
+                self.state += 'ing'
+            else:
+                self.state += 'ed'
+
+    def started(self):
+        return self.execute_command([self.svc_cmd, '-u', self.svc_full])
+
+    def stopped(self):
+        return self.execute_command([self.svc_cmd, '-d', self.svc_full])
+
+    def once(self):
+        return self.execute_command([self.svc_cmd, '-o', self.svc_full])
+
+    def reloaded(self):
+        return self.execute_command([self.svc_cmd, '-h', self.svc_full])
+
+    def restarted(self):
+        return self.execute_command([self.svc_cmd, '-t', self.svc_full])
+
+    def killed(self):
+        return self.execute_command([self.svc_cmd, '-k', self.svc_full])
 
 # ===========================================
 # Main control flow
@@ -411,7 +501,7 @@ def main():
             state = dict(choices=['started', 'stopped', 'restarted', 'killed', 'reloaded', 'once']),
             enabled = dict(required=False, type='bool'),
             downed = dict(required=False, type='bool'),
-            distro = dict(required=False, default='daemontools', choices=['daemontools', 'nosh']),
+            distro = dict(required=False, default='daemontools', choices=['daemontools', 'nosh', 'runit', 's6']),
             service_dir = dict(required=False, default='/service'),
             service_src = dict(required=False, default='/etc/service'),
         ),
