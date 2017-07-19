@@ -46,7 +46,7 @@ The `killed` state is mentionned in the documentation but not listed as possible
 
 The state -> method correspondence has needless indirection. Methods are now named after the expected state directly.
 
-Daemontools' `svc` doesn't have a `-1` option for the SIGUSR1 signal, it has been replaced by `-h` for SIGHUP, which is also the more usual reloading signal.
+Daemontools' `svc` doesn't have a `-1` option for the SIGUSR1 signal, it has been replaced by `-h` for SIGHUP, which is also the more usual reloading signal. However, this changes the interface.
 
 ## usage
 

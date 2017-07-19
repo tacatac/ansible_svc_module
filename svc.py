@@ -43,7 +43,7 @@ options:
             - C(Started)/C(stopped) are idempotent actions that will not run
               commands unless necessary.  C(restarted) will always bounce the
               svc (svc -t) and C(killed) will always bounce the svc (svc -k).
-              C(reloaded) will send a sigusr1 (svc -1).
+              C(reloaded) will send a sighup (svc -h).
               C(once) will run a normally downed svc once (svc -o), not really
               an idempotent operation.
     downed:
@@ -321,7 +321,7 @@ class Nosh(Svc):
         return self.execute_command([self.svc_cmd, '--once', self.svc_full])
 
     def reloaded(self):
-        return self.execute_command([self.svc_cmd, '--usr1', self.svc_full])
+        return self.execute_command([self.sys_cmd, 'hangup', self.svc_full])
 
     def restarted(self):
         return self.execute_command([self.sys_cmd, 'condrestart', self.svc_full])
