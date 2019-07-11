@@ -1,6 +1,6 @@
 # ansible/modules/system/svc.py
 
-**NB: extending the Svc module has been abandonned in favour of a [separate Nosh module](https://github.com/tacatac/ansible/blob/nosh-system-module/lib/ansible/modules/system/nosh.py). In fact, splitting the Service module is the current [Ansible project](https://github.com/ansible/ansible/projects/13).**
+**NB: extending the Svc module has been abandoned in favour of a [separate Nosh module](https://github.com/tacatac/ansible/blob/nosh-system-module/lib/ansible/modules/system/nosh.py). In fact, splitting the Service module is the current [Ansible project](https://github.com/ansible/ansible/projects/13).**
 
 This is an attempt to extend the [svc module](https://github.com/ansible/ansible/blob/devel/lib/ansible/modules/system/svc.py) for managing daemontools by adding a subclass to control [nosh](https://jdebp.eu/Softwares/nosh) (and possibly other daemontools family toolsets).
 
